@@ -1,0 +1,10 @@
+Op za 8 mei 2021 om 12:09 schreef
+Richard Lindhout <richardlindhout96@gmail.com>:
+
+> Steps 0-2 are in prod. Gonna let them sit for a bit then start cleaning up
+> the old code with 3 & 4.
+>
+>
+> Reply to this email directly or view it on GitHub.
+>
+>
