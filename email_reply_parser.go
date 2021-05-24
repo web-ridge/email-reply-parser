@@ -3,7 +3,6 @@ package email_reply_parser //nolint:stylecheck,golint
 import (
 	"fmt"
 	"regexp"
-	"strconv"
 	"strings"
 	"unicode"
 )
@@ -37,13 +36,16 @@ func Parse(plainMail string) string {
 	//nolint:prealloc
 	var finalLines []string
 	for i, line := range lines {
-		startOfSignature := IsSignatureStart(i, line, lines)
-		if startOfSignature {
+		if isSignatureStart(i, line, lines) {
 			break
 		}
+		if detectQuotedEmailStart(i, line, lines) {
+			break
+		}
+
 		finalLines = append(finalLines, line.Content)
 	}
-	return strings.Join(finalLines, "\n")
+	return removeWhiteSpaceBeforeAndAfter(strings.Join(finalLines, "\n"))
 }
 
 func lineBeforeAndAfter(lineIndex int, lines []*Line) (*Line, *Line) {
@@ -52,13 +54,19 @@ func lineBeforeAndAfter(lineIndex int, lines []*Line) (*Line, *Line) {
 	if lineIndex > 0 {
 		before = lines[lineIndex-1]
 	}
-	if lineIndex != len(lines)-1 {
+	isLast := lineIndex != len(lines)-1
+	if isLast {
 		after = lines[lineIndex+1]
 	}
 	return before, after
 }
 
-func IsSignatureStart(lineIndex int, line *Line, lines []*Line) bool {
+func isSignatureStart(lineIndex int, line *Line, lines []*Line) bool {
+	// first line is probably not the signature
+	if lineIndex == 0 {
+		return false
+	}
+
 	lowerLine := strings.ToLower(line.ContentStripped)
 
 	// --
@@ -68,7 +76,7 @@ func IsSignatureStart(lineIndex int, line *Line, lines []*Line) bool {
 	}
 
 	// e.g. with best regards,
-	if detectGreetings(line) {
+	if detectGreetings(strings.ToLower(line.ContentStripped)) {
 		return true
 	}
 
@@ -93,17 +101,19 @@ func IsSignatureStart(lineIndex int, line *Line, lines []*Line) bool {
 		return true
 	}
 
+	return false
+}
+
+func detectQuotedEmailStart(lineIndex int, line *Line, lines []*Line) bool {
 	// Detect by quoted reply headers
 	// sometimes there are line breaks within the quoted reply header
 	_, after := lineBeforeAndAfter(lineIndex, lines)
-	lineWithBreaksInOneLine := strings.ToLower(joinLineContents("", line, after))
-
+	lineWithBreaksInOneLine := strings.ToLower(removeEnters(joinLineContents("", line, after)))
+	// fmt.Println("after", after.ContentStripped)
+	// fmt.Println("lineIndex", lineIndex)
+	// fmt.Println("lineWithBreaksInOneLine", lineWithBreaksInOneLine)
 	// On .. wrote ..
-	if isQuotedEmailStart(lineWithBreaksInOneLine) {
-		return true
-	}
-
-	return false
+	return isQuotedEmailStart(lineWithBreaksInOneLine)
 }
 
 func isValidSignatureFormat(fullLine string) bool {
@@ -121,12 +131,8 @@ func detectSignature(lineIndex int, line *Line, lines []*Line) bool {
 		linesTillQuotedText := getLinesTillQuotedText(lineIndex, lines)
 		for i, signatureLine := range linesTillQuotedText {
 			if isPossibleSignatureLine(signatureLine.ContentStripped) {
-
-				fmt.Println("matches++", signatureLine.ContentStripped)
 				lastMatchLineIndex = i
 				matches++
-			} else {
-				fmt.Println("matches--", signatureLine.ContentStripped)
 			}
 		}
 
@@ -141,6 +147,10 @@ func detectSignature(lineIndex int, line *Line, lines []*Line) bool {
 		}
 
 		percentMatched := (float64(matches) * 100) / float64(filledLines)
+		fmt.Println("percentMatched", percentMatched)
+		fmt.Println("matches", matches)
+		fmt.Println("filledLines", filledLines)
+
 		return percentMatched > 70
 	}
 
@@ -157,21 +167,37 @@ func countLinesFilled(lines []*Line) int {
 	return count
 }
 
-func detectGreetings(line *Line) bool {
+func detectGreetings(line string) bool {
 	// greetings but not
-	countSpaces := strings.Count(line.ContentStripped, " ")
-	if startWithOneOf(line.ContentStripped, greetings, false) && countSpaces < 5 {
+	if startWithOneOfButDoesNotContainMuchAfter(line, greetings, 2) {
+		return true
+	}
+
+	// without first word e.g. best regards or
+	// -->met<-- vriendelijke groeten
+	if startWithOneOfButDoesNotContainMuchAfter(removeFirstWord(line), greetings, 2) {
 		return true
 	}
 	return false
 }
 
+func removeFirstWord(sentence string) string {
+	split := strings.Split(sentence, space)
+	var a []string
+	for i, w := range split {
+		if i > 0 {
+			a = append(a, w)
+		}
+	}
+	return strings.Join(a, space)
+}
+
 func getLinesTillQuotedText(lineIndex int, lines []*Line) []*Line {
 	var a []*Line
-	// TODO make more efficient by cutting the slice
+
 	for i, line := range lines {
 		if i > lineIndex {
-			if line.IsQuoted {
+			if detectQuotedEmailStart(i, line, lines) {
 				break
 			}
 			a = append(a, line)
@@ -184,26 +210,86 @@ func isPossibleSignatureLine(sentence string) bool {
 	if isName(sentence) {
 		return true
 	}
-	if isLabelWithValue(sentence) {
+
+	withoutStripe := strings.TrimPrefix(sentence, "-")
+	if isName(strings.TrimSpace(withoutStripe)) {
 		return true
 	}
-	if isEmail(sentence) {
+
+	noSpaceBetweenNumbers := removeSpacesBetweenNumbers(sentence)
+
+	if isLogo(sentence) {
 		return true
 	}
-	if isWebsite(sentence) {
+	if areStripes(sentence) {
+		return true
+	}
+	if isLabelWithValue(noSpaceBetweenNumbers) {
+		return true
+	}
+	if isNumberSignature(noSpaceBetweenNumbers) {
+		return true
+	}
+	if isEmailSignature(sentence) {
+		return true
+	}
+	if isWebsiteSignature(sentence) {
 		return true
 	}
 	return false
 }
 
-func isWebsite(sentence string) bool {
-	spaces := strings.Count(sentence, " ")
-	return containsWebsite(sentence) && spaces < 3
+func isLogo(sentence string) bool {
+	return strings.HasPrefix(sentence, "[image") && strings.HasSuffix(sentence, "]")
 }
 
-func isEmail(sentence string) bool {
+func removeSpacesBetweenNumbers(sentence string) string {
+	var newSentence string
+	split := strings.Split(sentence, " ")
+	for i, word := range split {
+		if i > 0 {
+			prevWord := split[i-1]
+			if !isNumberWord(prevWord) {
+				newSentence += " "
+			}
+		}
+		newSentence += word
+	}
+	return newSentence
+}
+
+func isNumberWord(s string) bool {
+	for _, c := range s {
+		if !unicode.IsDigit(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isWebsiteSignature(sentence string) bool {
 	spaces := strings.Count(sentence, " ")
-	return containsEmail(sentence) && spaces < 3
+	return containsWebsite(sentence) && spaces <= 2
+}
+
+func isEmailSignature(sentence string) bool {
+	spaces := strings.Count(sentence, " ")
+	return containsEmail(sentence) && spaces <= 2
+}
+
+func isNumberSignature(sentence string) bool {
+	spaces := strings.Count(sentence, " ")
+	return containsNumber(sentence) && spaces <= 3
+}
+
+func areStripes(sentence string) bool {
+	for _, c := range sentence {
+		if string(c) != `-` && string(c) != `_` {
+			return false
+		}
+	}
+
+	return len(sentence) > 0
 }
 
 func isLabelWithValue(v string) bool {
@@ -221,22 +307,29 @@ func isLabelWithValue(v string) bool {
 			return true
 		}
 
-		return amountOfDigits(lowerLine) > 5 ||
-			containsEmail(lowerLine) ||
-			containsWebsite(lowerLine)
+		return containsEmail(lowerLine) ||
+			containsWebsite(lowerLine) ||
+			isNumberSignature(lowerLine)
 	}
 
 	return false
 }
 
+var dot = "."
+
 func containsWebsite(v string) bool {
 	words := strings.Split(v, " ")
 	for _, word := range words {
-		splitByDot := strings.Split(word, ".")
-		extension := splitByDot[len(splitByDot)-1]
-		if len(extension) <= 3 &&
-			len(splitByDot) >= 2 && // with or without wwww
-			len(splitByDot) < 5 { // www facebook com
+		containsSlashes := strings.Count(word, "/")
+		containsDots := strings.Count(word, ".")
+		containsHttp := strings.Count(word, "http")
+		containsWww := strings.Count(word, "www")
+
+		containsExtension := hasOneOf(word, extensions, &dot, nil)
+
+		count := containsSlashes + containsDots + containsHttp + containsWww
+
+		if count >= 1 && containsExtension {
 			return true
 		}
 	}
@@ -254,17 +347,27 @@ func containsEmail(v string) bool {
 	return false
 }
 
+func containsNumber(v string) bool {
+	words := strings.Split(v, " ")
+	for _, word := range words {
+		if amountOfDigits(word) > 5 {
+			return true
+		}
+	}
+	return false
+}
+
 func isName(sentence string) bool {
-	fmt.Println(sentence)
 	nameAndFunction := splitNameAndFunction(sentence)
-	fmt.Println(nameAndFunction)
-	splitName := strings.Split(nameAndFunction[0], " ")
-	fmt.Println(splitName)
+
+	splitName := strings.Split(removeWhitespace(nameAndFunction[0]), " ")
+
 	// is a name e.g Kate Green, Richard Lindhout, Jan van der Doorn
 	if len(splitName) > 0 && len(splitName) <= 3 {
 		firstName := removeWhitespace(splitName[0])
 		lastName := removeWhitespace(splitName[len(splitName)-1])
-		isValidName := isFirstLetterUppercase(firstName) && isFirstLetterUppercase(lastName)
+
+		isValidName := (len(firstName) > 3 || len(lastName) > 3) && isFirstLetterUppercase(firstName) && isFirstLetterUppercase(lastName)
 		invalidCharacters := containsSpecialCharacters(firstName) || containsSpecialCharacters(lastName)
 
 		if len(nameAndFunction) > 1 {
@@ -272,6 +375,7 @@ func isName(sentence string) bool {
 			function := removeWhitespace(nameAndFunction[1])
 			isFunction := len(function) > 3
 			validFunction := strings.Count(function, " ") <= 3
+
 			if isFunction && !validFunction {
 				return false
 			}
@@ -309,8 +413,7 @@ func containsSpecialCharacters(v string) bool {
 func amountOfDigits(v string) int {
 	var amount int
 	for _, c := range v {
-		_, err := strconv.Atoi(string(c))
-		if err == nil {
+		if unicode.IsDigit(c) {
 			amount++
 		}
 	}
@@ -335,9 +438,11 @@ func isFirstLetterUppercase(v string) bool {
 
 func isSentFrom(fullLine string) bool {
 	startsWithSend := startWithOneOf(fullLine, sent, true)
-	containsDevice := hasOneOf(fullLine, mailPrograms, false, false)
+	containsDevice := hasOneOf(fullLine, mailPrograms, nil, nil)
 	return startsWithSend && containsDevice
 }
+
+var spaceStr = ""
 
 func isQuotedEmailStart(fullLine string) bool {
 	// on ... wrote etc
@@ -346,7 +451,7 @@ func isQuotedEmailStart(fullLine string) bool {
 	// On Oct 1, 2012, at 11:55 PM, Dave Tapley wrote:
 	// 2013/11/1 John Smith <john@smith.org>
 	startsWithOn := startWithOneOf(fullLine, on, true)
-	containsWrote := hasOneOf(fullLine, wrote, true, false)
+	containsWrote := hasOneOf(fullLine, wrote, &spaceStr, nil)
 	allNumbers := findNumbers(fullLine)
 	containsYear := numberArrayContainsYear(allNumbers)
 	containsEnoughNumbers := len(allNumbers) >= 3
@@ -355,11 +460,6 @@ func isQuotedEmailStart(fullLine string) bool {
 		strings.Contains(fullLine, "<") &&
 		strings.Contains(fullLine, ">")
 
-	if startsWithOn {
-		fmt.Println("fullLine", fullLine)
-	} else if containsEnoughNumbers {
-		fmt.Println("??", fullLine)
-	}
 	if startsWithOn && containsWrote && containsEnoughNumbers && containsYear {
 		return true
 	} else if containsQuotedEmail && containsEnoughNumbers && containsYear {
@@ -394,14 +494,14 @@ func numberArrayContainsYear(a []string) bool {
 	return false
 }
 
-func hasOneOf(value string, a []string, addSpaceFront bool, addSpaceBack bool) bool {
+func hasOneOf(value string, a []string, addFront *string, addBack *string) bool {
 	for _, c := range a {
 		finalContains := strings.ToLower(c)
-		if addSpaceFront {
-			finalContains = " " + finalContains
+		if addFront != nil {
+			finalContains = *addFront + finalContains
 		}
-		if addSpaceBack {
-			finalContains += " "
+		if addBack != nil {
+			finalContains += *addBack
 		}
 		if strings.Contains(value, finalContains) {
 			return true
@@ -418,6 +518,18 @@ func startWithOneOf(value string, a []string, addSpaceAfter bool) bool {
 		}
 		if strings.HasPrefix(value, finalPrefix) {
 			return true
+		}
+	}
+	return false
+}
+
+func startWithOneOfButDoesNotContainMuchAfter(value string, a []string, maxCharactersAfter int) bool {
+	for _, prefix := range a {
+		finalPrefix := strings.ToLower(prefix)
+
+		if strings.HasPrefix(value, finalPrefix) {
+			after := strings.TrimPrefix(value, finalPrefix)
+			return len(after) <= maxCharactersAfter
 		}
 	}
 	return false
@@ -447,4 +559,24 @@ func removeWhitespace(v string) (r string) {
 		r = removeWhitespace(r)
 	}
 	return strings.TrimSpace(r)
+}
+
+func removeEnters(v string) (r string) {
+	r = strings.ReplaceAll(v, "\n", "")
+	if v != r {
+		r = removeEnters(r)
+	}
+	return strings.TrimSpace(r)
+}
+
+func removeWhiteSpaceBeforeAndAfter(v string) (r string) {
+	r = strings.TrimSpace(v)
+	r = strings.TrimSuffix(r, "\n")
+	r = strings.TrimPrefix(r, "\n")
+	r = strings.TrimSpace(r)
+
+	if v != r {
+		r = removeWhiteSpaceBeforeAndAfter(r)
+	}
+	return r
 }

@@ -14,10 +14,20 @@ func TestIsQuotedEmailStart(t *testing.T) {
 		"On Monday, November 4, 2013 4:29 PM, John Smith <john.smith@example.org> wrote:",
 		"2013/11/1 John Smith <john@smith.org>",
 		"On Monday, November 4, 2013 4:29 PM, John Smith <john.smith@example.org> wrote:",
+		"on mon, aug 26, 2019 at 4:37 pm the hiring engine <a-really-long-automated-email+1234556@humanresources.com> wrote:",
 	}
 	for _, should := range shouldReturnTrue {
 		if isQuotedEmailStart(strings.ToLower(should)) != true {
 			t.Errorf("Should return true: %v", should)
+		}
+	}
+
+	shouldReturnFalse := []string{
+		"since on Monday, November 4, John Smith wrote me this message",
+	}
+	for _, should := range shouldReturnFalse {
+		if isQuotedEmailStart(strings.ToLower(should)) != false {
+			t.Errorf("Should return false: %v", should)
 		}
 	}
 }
@@ -37,6 +47,8 @@ func TestIsName(t *testing.T) {
 	}
 
 	shouldReturnFalse := []string{
+		"Hi",
+		"Ok",
 		"tel 01666666 ",
 		"email 01666666 ",
 		"kvk 01666666 ",
@@ -78,6 +90,11 @@ func TestPossibleSignature(t *testing.T) {
 		"karen@webby.com",
 		"www.thing.com",
 		"thing.com",
+		"------",
+		"______",
+		"-Abhishek Kona",
+		"riak-users@lists.basho.com",
+		"http://lists.basho.com/mailman/listinfo/riak-users_lists.basho.com",
 		// TODO: address lines
 	}
 	for _, should := range shouldReturnTrue {
@@ -86,6 +103,8 @@ func TestPossibleSignature(t *testing.T) {
 		}
 	}
 	shouldReturnFalse := []string{
+		"Hi",
+		"Ok",
 		"Lorem Ipsum is simply dummy text of the printing and typesetting industry.",
 		"Haha dit is supper grappig!",
 		"Ok!",
@@ -98,6 +117,38 @@ func TestPossibleSignature(t *testing.T) {
 		if isPossibleSignatureLine(should) != false {
 			t.Errorf("Should return false: %v", should)
 		}
+	}
+}
+
+func TestGreetings(t *testing.T) {
+	shouldReturnTrue := []string{
+		"Met vriendelijke groeten,",
+		"best regards",
+		"groeten,",
+		"groeten",
+	}
+	for _, should := range shouldReturnTrue {
+		if detectGreetings(should) != true {
+			t.Errorf("Should return true: %v", should)
+		}
+	}
+	shouldReturnFalse := []string{
+		"hij zei nog dat je de groeten kreeg",
+		"de groeten van Jan",
+	}
+	for _, should := range shouldReturnFalse {
+		if detectGreetings(should) != false {
+			t.Errorf("Should return false: %v", should)
+		}
+	}
+}
+
+func TestRemoveSpacesBetweenNumbers(t *testing.T) {
+	before := "Mijn nummer is 0166 66 42 42 45 67"
+	after := "Mijn nummer is 01666642424567"
+	result := removeSpacesBetweenNumbers(before)
+	if result != after {
+		t.Errorf("is %v but should be %v", result, after)
 	}
 }
 
@@ -133,7 +184,7 @@ func TestRichardSignature(t *testing.T) {
 	content := Parse(richardMail)
 	expected := ":+1:"
 	if content != expected {
-		t.Errorf("expected: %v but is %v", expected, content)
+		t.Errorf("expected: `%v` but is `%v`", expected, content)
 	}
 }
 
@@ -152,6 +203,33 @@ Beatrixlaan 2, 4694EG Scherpenisse
 *IBAN    NL93 BUNQ 0000 1111 22*
 *WEB     webRidge.nl <https://webridge.nl/>*
 `
+
+const abishhekMail = `
+Hi
+
+-Abhishek Kona
+
+
+_______________________________________________
+riak-users mailing list
+riak-users@lists.basho.com
+http://lists.basho.com/mailman/listinfo/riak-users_lists.basho.com
+
+On Mon, Aug 26, 2019 at 4:37 PM The Hiring Engine <
+a-really-long-automated-email+1234556@humanresources.com> wrote:
+> dd
+> sldfj
+> slfjlsdf
+> slkfjlksfj
+`
+
+func TestAbhishekSignature(t *testing.T) {
+	content := Parse(abishhekMail)
+	expected := "Hi"
+	if content != expected {
+		t.Errorf("expected: `%v` but is `%v`", expected, content)
+	}
+}
 
 func TestAllKindOfCombinations(t *testing.T) {
 	var howManyCombinations int
@@ -207,11 +285,11 @@ func TestAllKindOfCombinations(t *testing.T) {
 							expectedContent := string(mailContent)
 
 							parsed := Parse(
-								expectedContent + "\n" +
-									string(signatureContent) + "\n" +
+								expectedContent + "\n\n" +
+									string(signatureContent) + "\n\n" +
 									string(quotedReplyContent),
 							)
-							if parsed != expectedContent {
+							if parsed != removeWhiteSpaceBeforeAndAfter(expectedContent) {
 								t.Errorf(`mail: %v, reply: %v, signature: %v: expected
 								
 								"%v"
