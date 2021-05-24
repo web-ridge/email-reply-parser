@@ -24,6 +24,7 @@ func TestIsQuotedEmailStart(t *testing.T) {
 
 	shouldReturnFalse := []string{
 		"since on Monday, November 4, John Smith wrote me this message",
+		"You see this this the problem",
 	}
 	for _, should := range shouldReturnFalse {
 		if isQuotedEmailStart(strings.ToLower(should)) != false {
@@ -58,6 +59,7 @@ func TestIsName(t *testing.T) {
 		"KvK 01666666 ",
 		"BTW 01666666 ",
 		"Street 2, City, Zeeland, 4694EG, NL",
+		"You see this this the problem",
 	}
 	for _, should := range shouldReturnFalse {
 		if isName(should) != false {
@@ -112,6 +114,7 @@ func TestPossibleSignature(t *testing.T) {
 		"That's not true",
 		"Her email address is karen@webby.com",
 		"Her website is facebook.com",
+		"You see this this the problem",
 	}
 	for _, should := range shouldReturnFalse {
 		if isPossibleSignatureLine(should) != false {
@@ -135,6 +138,7 @@ func TestGreetings(t *testing.T) {
 	shouldReturnFalse := []string{
 		"hij zei nog dat je de groeten kreeg",
 		"de groeten van Jan",
+		"You see this this the problem",
 	}
 	for _, should := range shouldReturnFalse {
 		if detectGreetings(should) != false {

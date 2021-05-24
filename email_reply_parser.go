@@ -1,7 +1,6 @@
 package email_reply_parser //nolint:stylecheck,golint
 
 import (
-	"fmt"
 	"regexp"
 	"strings"
 	"unicode"
@@ -27,7 +26,7 @@ func Parse(plainMail string) string {
 			Index:              i,
 			Content:            baseLine,
 			ContentStripped:    removeMarkdown(contentStripped),
-			IsEmpty:            contentStripped == "",
+			IsEmpty:            isWhitespace(contentStripped),
 			IsQuoted:           strings.HasPrefix(baseLine, ">"),
 			IsForwardedMessage: strings.HasPrefix(baseLine, ">"),
 		}
@@ -109,9 +108,7 @@ func detectQuotedEmailStart(lineIndex int, line *Line, lines []*Line) bool {
 	// sometimes there are line breaks within the quoted reply header
 	_, after := lineBeforeAndAfter(lineIndex, lines)
 	lineWithBreaksInOneLine := strings.ToLower(removeEnters(joinLineContents("", line, after)))
-	// fmt.Println("after", after.ContentStripped)
-	// fmt.Println("lineIndex", lineIndex)
-	// fmt.Println("lineWithBreaksInOneLine", lineWithBreaksInOneLine)
+
 	// On .. wrote ..
 	return isQuotedEmailStart(lineWithBreaksInOneLine)
 }
@@ -147,10 +144,6 @@ func detectSignature(lineIndex int, line *Line, lines []*Line) bool {
 		}
 
 		percentMatched := (float64(matches) * 100) / float64(filledLines)
-		fmt.Println("percentMatched", percentMatched)
-		fmt.Println("matches", matches)
-		fmt.Println("filledLines", filledLines)
-
 		return percentMatched > 70
 	}
 
@@ -295,24 +288,16 @@ func areStripes(sentence string) bool {
 func isLabelWithValue(v string) bool {
 	// is a telephone number with label or some other stuff
 	lowerLine := strings.ToLower(v)
-	amountOfSpaces := strings.Count(lowerLine, " ")
+	withoutLabel := removeFirstWord(lowerLine)
+
+	amountOfSpaces := strings.Count(withoutLabel, " ")
 
 	// Beatrixlaan 2, 4694EG Scherpenisse
 	// if amountOfCommas >
 
-	if amountOfSpaces <= 3 {
-		hasLabel := startWithOneOf(lowerLine, labels, false)
-
-		if hasLabel {
-			return true
-		}
-
-		return containsEmail(lowerLine) ||
-			containsWebsite(lowerLine) ||
-			isNumberSignature(lowerLine)
-	}
-
-	return false
+	return amountOfSpaces <= 1 && (containsEmail(withoutLabel) ||
+		containsWebsite(withoutLabel) ||
+		isNumberSignature(withoutLabel))
 }
 
 var dot = "."
