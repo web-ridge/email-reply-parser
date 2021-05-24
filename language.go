@@ -2,8 +2,13 @@ package email_reply_parser //nolint:stylecheck,golint
 
 var greetings = []string{
 	// English
+	`yours sincerely`,
+	`yours faithfully`,
+	`yours truly`,
 	`regards`,
 	`best regards`,
+	`with best wishes`,
+	`with many thanks and best wishes`,
 	// French
 	`meilleures salutations`,
 	`cordialement`,
