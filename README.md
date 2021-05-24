@@ -50,6 +50,10 @@ We try to support the following languages
 - Vietnamese
 
 
+## TODO
+- Forwarded emails
+- Emails where quoted-reply is on top instead of bottom
+
 
 
 Please add more tests for your language and use-cases 
