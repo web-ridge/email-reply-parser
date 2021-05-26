@@ -185,6 +185,9 @@ Lorem Ipsum is simply dummy text of the printing and typesetting industry. Lorem
 `
 
 func TestRichardSignature(t *testing.T) {
+	if isQuoteOnTop(richardMail) {
+		t.Errorf("quote starts on bottom")
+	}
 	content := Parse(richardMail)
 	expected := ":+1:"
 	if content != expected {
@@ -209,12 +212,29 @@ Beatrixlaan 2, 4694EG Scherpenisse
 `
 
 func TestRichardReverseSignature(t *testing.T) {
+	if !isQuoteOnTop(richardReverseMail) {
+		t.Errorf("quote starts on top")
+	}
 	content := Parse(richardReverseMail)
 	expected := ":+1:"
 	if content != expected {
 		t.Errorf("expected: `%v` but is `%v`", expected, content)
 	}
 }
+
+func TestMultilineOrSingleLine(t *testing.T) {
+	lines := plainMailToLines(multilineStartQuoteReply)
+	multi, single := detectQuotedEmailStart(0, lines[0], lines)
+	if !multi {
+		t.Errorf("Should be multi")
+	}
+	if single {
+		t.Errorf("single should be false")
+	}
+}
+
+const multilineStartQuoteReply = `Op za 8 mei 2021 om 12:09 schreef
+Richard Lindhout <richardlindhout96@gmail.com>:`
 
 const richardReverseMail = `
 
@@ -311,7 +331,7 @@ func TestAllKindOfCombinations(t *testing.T) {
 								return nil
 							}
 
-							howManyCombinations++
+							howManyCombinations += 2
 
 							quotedReplyContent, err := ioutil.ReadFile(quotedReplyPath)
 							if err != nil {
@@ -320,13 +340,12 @@ func TestAllKindOfCombinations(t *testing.T) {
 
 							expectedContent := string(mailContent)
 
-							parsed := Parse(
+							parsedQuotedReplyBottom := Parse(
 								expectedContent + "\n\n" +
 									string(signatureContent) + "\n\n" +
 									string(quotedReplyContent),
 							)
-							if parsed != removeWhiteSpaceBeforeAndAfter(expectedContent) {
-								t.Errorf(`mail: %v, reply: %v, signature: %v: expected
+							logLine := `mail: %v, reply: %v, signature: %v: expected
 								
 								"%v"
 								
@@ -334,12 +353,33 @@ func TestAllKindOfCombinations(t *testing.T) {
 								
 								"%v"
 								
-								`,
+								`
+							if parsedQuotedReplyBottom != removeWhiteSpaceBeforeAndAfter(expectedContent) {
+								t.Errorf(
+									logLine,
 									mailFile.Name(),
 									quotedReplyFile.Name(),
 									signatureFile.Name(),
 									expectedContent,
-									parsed,
+									parsedQuotedReplyBottom,
+								)
+							} else {
+								howManySuccess++
+							}
+
+							parsedQuotedReplyTop := Parse(
+								string(quotedReplyContent) + "\n\n" +
+									expectedContent + "\n\n" +
+									string(signatureContent) + "\n\n",
+							)
+							if parsedQuotedReplyTop != removeWhiteSpaceBeforeAndAfter(expectedContent) {
+								t.Errorf(
+									logLine,
+									mailFile.Name(),
+									quotedReplyFile.Name(),
+									signatureFile.Name(),
+									expectedContent,
+									parsedQuotedReplyTop,
 								)
 							} else {
 								howManySuccess++
@@ -347,8 +387,6 @@ func TestAllKindOfCombinations(t *testing.T) {
 							return nil
 						})
 
-					// TODO: signature first
-					// parsed := Parse(string(signatureContent) +"\n" +string(mailContent))
 					if quotedReplyErr != nil {
 						return quotedReplyErr
 					}

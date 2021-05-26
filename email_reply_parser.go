@@ -61,7 +61,8 @@ func getPlainLinesWithQuotedReplyOnBottom(lines []*Line) []string {
 		if isSignatureStart(i, line, lines) {
 			break
 		}
-		if detectQuotedEmailStart(i, line, lines) {
+		multilineQuoteReply, _ := detectQuotedEmailStart(i, line, lines)
+		if multilineQuoteReply {
 			break
 		}
 		finalLines = append(finalLines, line.Content)
@@ -72,19 +73,33 @@ func getPlainLinesWithQuotedReplyOnBottom(lines []*Line) []string {
 func getPlainLinesWithQuotedReplyOnTop(lines []*Line) []string {
 	//nolint:prealloc
 	var finalLines []string
-	var isPastQuotedReply bool
+	var quotedStartSeen bool
+	var normalLineSeen bool
+	var skipNextLine bool
 	for i, line := range lines {
+		multiLine, singleLine := detectQuotedEmailStart(i, line, lines)
 		// start of quoted text can be ignored
-		if detectQuotedEmailStart(i, line, lines) {
+		if multiLine {
+			quotedStartSeen = true
+			if !singleLine {
+				skipNextLine = true
+			}
 			continue
 		}
 
-		// if text is not quoted anymore we know the reply starts
-		if !line.IsQuoted {
-			isPastQuotedReply = true
+		// skip this line because this is still the quote start
+		if skipNextLine {
+			skipNextLine = false
+			continue
 		}
 
-		if isPastQuotedReply {
+		if quotedStartSeen &&
+			!line.IsQuoted &&
+			!line.IsEmpty {
+			normalLineSeen = true
+		}
+
+		if normalLineSeen && quotedStartSeen {
 			if isSignatureStart(i, line, lines) {
 				break
 			}
@@ -99,7 +114,8 @@ func isQuoteOnTop(plainMail string) bool {
 	plainMailStrippedWhiteSpace := removeWhitespace(plainMail)
 	lines := plainMailToLines(plainMailStrippedWhiteSpace)
 	for i, line := range lines {
-		if i == 0 && detectQuotedEmailStart(i, line, lines) {
+		isQuoteStarted, _ := detectQuotedEmailStart(i, line, lines)
+		if i == 0 && isQuoteStarted {
 			return true
 		}
 	}
@@ -163,14 +179,19 @@ func isSignatureStart(lineIndex int, line *Line, lines []*Line) bool {
 	return false
 }
 
-func detectQuotedEmailStart(lineIndex int, line *Line, lines []*Line) bool {
+func detectQuotedEmailStart(lineIndex int, line *Line, lines []*Line) (bool, bool) {
 	// Detect by quoted reply headers
 	// sometimes there are line breaks within the quoted reply header
 	_, after := lineBeforeAndAfter(lineIndex, lines)
 	lineWithBreaksInOneLine := strings.ToLower(removeEnters(joinLineContents("", line, after)))
 
+	multi := isQuotedEmailStart(lineWithBreaksInOneLine)
+	single := isQuotedEmailStart(strings.ToLower(line.ContentStripped)) && containsQuotedEmail(after.ContentStripped)
+	if after != nil && containsQuotedEmail(after.ContentStripped) {
+		single = false
+	}
 	// On .. wrote ..
-	return isQuotedEmailStart(lineWithBreaksInOneLine)
+	return multi, single
 }
 
 func isValidSignatureFormat(fullLine string) bool {
@@ -250,7 +271,8 @@ func getLinesTillQuotedText(lineIndex int, lines []*Line) []*Line {
 
 	for i, line := range lines {
 		if i > lineIndex {
-			if detectQuotedEmailStart(i, line, lines) {
+			multilineQuoteEmailStart, _ := detectQuotedEmailStart(i, line, lines)
+			if multilineQuoteEmailStart {
 				break
 			}
 			a = append(a, line)
@@ -485,7 +507,7 @@ func isSentFrom(fullLine string) bool {
 	return startsWithSend && containsDevice
 }
 
-var spaceStr = ""
+var spaceStr = " "
 
 func isQuotedEmailStart(fullLine string) bool {
 	// on ... wrote etc
@@ -509,6 +531,12 @@ func isQuotedEmailStart(fullLine string) bool {
 		return true
 	}
 	return false
+}
+
+func containsQuotedEmail(v string) bool {
+	return strings.Contains(v, "@") &&
+		strings.Contains(v, "<") &&
+		strings.Contains(v, ">")
 }
 
 func joinLineContents(sep string, lines ...*Line) string {
