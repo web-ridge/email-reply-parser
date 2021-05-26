@@ -1,10 +1,11 @@
-# Email Reply Parser (WORK IN PROGRESS)
+# Email Reply Parser
 Email Reply Parser is a Golang library to parse plain-text email replies and extract content
 
 This library supports most email replies, signatures and locales and quoted replies.
 
 This library is used at **small** scale within webRidge.
 
+- Supports stripping quoted replies in top/bottom
 - Strip email replies like On DATE, NAME <EMAIL> wrote:
 - Removes signatures like Sent from my iPhone
 - Detects signatures like

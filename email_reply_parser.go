@@ -7,31 +7,54 @@ import (
 )
 
 type Line struct {
-	Index              int
-	Content            string
-	ContentStripped    string
-	IsForwardedMessage bool
-	IsQuoted           bool
-	IsEmpty            bool
+	Index           int
+	Content         string
+	ContentStripped string
+	IsQuoted        bool
+	IsEmpty         bool
 }
 
+const (
+	space = ` `
+	enter = "\n"
+)
+
+var dot = "."
+
 func Parse(plainMail string) string {
-	baseLines := strings.Split(plainMail, "\n")
+	lines := plainMailToLines(plainMail)
+
+	var plainLines []string
+	if isQuoteOnTop(plainMail) {
+		plainLines = getPlainLinesWithQuotedReplyOnTop(lines)
+	} else {
+		plainLines = getPlainLinesWithQuotedReplyOnBottom(lines)
+	}
+
+	return removeWhiteSpaceBeforeAndAfter(
+		strings.Join(plainLines, enter),
+	)
+}
+
+func plainMailToLines(plainMail string) []*Line {
+	baseLines := strings.Split(plainMail, enter)
 
 	// first save lines with some information we will use later on while parsing
 	lines := make([]*Line, len(baseLines))
 	for i, baseLine := range baseLines {
 		contentStripped := removeWhitespace(baseLine)
 		lines[i] = &Line{
-			Index:              i,
-			Content:            baseLine,
-			ContentStripped:    removeMarkdown(contentStripped),
-			IsEmpty:            isWhitespace(contentStripped),
-			IsQuoted:           strings.HasPrefix(baseLine, ">"),
-			IsForwardedMessage: strings.HasPrefix(baseLine, ">"),
+			Index:           i,
+			Content:         baseLine,
+			ContentStripped: removeMarkdown(contentStripped),
+			IsEmpty:         isWhitespace(contentStripped),
+			IsQuoted:        strings.HasPrefix(baseLine, ">"),
 		}
 	}
+	return lines
+}
 
+func getPlainLinesWithQuotedReplyOnBottom(lines []*Line) []string {
 	//nolint:prealloc
 	var finalLines []string
 	for i, line := range lines {
@@ -41,10 +64,47 @@ func Parse(plainMail string) string {
 		if detectQuotedEmailStart(i, line, lines) {
 			break
 		}
-
 		finalLines = append(finalLines, line.Content)
 	}
-	return removeWhiteSpaceBeforeAndAfter(strings.Join(finalLines, "\n"))
+	return finalLines
+}
+
+func getPlainLinesWithQuotedReplyOnTop(lines []*Line) []string {
+	//nolint:prealloc
+	var finalLines []string
+	var isPastQuotedReply bool
+	for i, line := range lines {
+		// start of quoted text can be ignored
+		if detectQuotedEmailStart(i, line, lines) {
+			continue
+		}
+
+		// if text is not quoted anymore we know the reply starts
+		if !line.IsQuoted {
+			isPastQuotedReply = true
+		}
+
+		if isPastQuotedReply {
+			if isSignatureStart(i, line, lines) {
+				break
+			}
+			finalLines = append(finalLines, line.Content)
+		}
+
+	}
+	return finalLines
+}
+
+func isQuoteOnTop(plainMail string) bool {
+	plainMailStrippedWhiteSpace := removeWhitespace(plainMail)
+	lines := plainMailToLines(plainMailStrippedWhiteSpace)
+	for i, line := range lines {
+		if i == 0 && detectQuotedEmailStart(i, line, lines) {
+			return true
+		}
+	}
+
+	return false
 }
 
 func lineBeforeAndAfter(lineIndex int, lines []*Line) (*Line, *Line) {
@@ -238,12 +298,12 @@ func isLogo(sentence string) bool {
 
 func removeSpacesBetweenNumbers(sentence string) string {
 	var newSentence string
-	split := strings.Split(sentence, " ")
+	split := strings.Split(sentence, space)
 	for i, word := range split {
 		if i > 0 {
 			prevWord := split[i-1]
 			if !isNumberWord(prevWord) {
-				newSentence += " "
+				newSentence += space
 			}
 		}
 		newSentence += word
@@ -261,17 +321,17 @@ func isNumberWord(s string) bool {
 }
 
 func isWebsiteSignature(sentence string) bool {
-	spaces := strings.Count(sentence, " ")
+	spaces := strings.Count(sentence, space)
 	return containsWebsite(sentence) && spaces <= 2
 }
 
 func isEmailSignature(sentence string) bool {
-	spaces := strings.Count(sentence, " ")
+	spaces := strings.Count(sentence, space)
 	return containsEmail(sentence) && spaces <= 2
 }
 
 func isNumberSignature(sentence string) bool {
-	spaces := strings.Count(sentence, " ")
+	spaces := strings.Count(sentence, space)
 	return containsNumber(sentence) && spaces <= 3
 }
 
@@ -290,7 +350,7 @@ func isLabelWithValue(v string) bool {
 	lowerLine := strings.ToLower(v)
 	withoutLabel := removeFirstWord(lowerLine)
 
-	amountOfSpaces := strings.Count(withoutLabel, " ")
+	amountOfSpaces := strings.Count(withoutLabel, space)
 
 	// Beatrixlaan 2, 4694EG Scherpenisse
 	// if amountOfCommas >
@@ -300,10 +360,8 @@ func isLabelWithValue(v string) bool {
 		isNumberSignature(withoutLabel))
 }
 
-var dot = "."
-
 func containsWebsite(v string) bool {
-	words := strings.Split(v, " ")
+	words := strings.Split(v, space)
 	for _, word := range words {
 		containsSlashes := strings.Count(word, "/")
 		containsDots := strings.Count(word, ".")
@@ -322,7 +380,7 @@ func containsWebsite(v string) bool {
 }
 
 func containsEmail(v string) bool {
-	words := strings.Split(v, " ")
+	words := strings.Split(v, space)
 	for _, word := range words {
 		if strings.Contains(word, "@") &&
 			strings.Contains(word, ".") {
@@ -333,7 +391,7 @@ func containsEmail(v string) bool {
 }
 
 func containsNumber(v string) bool {
-	words := strings.Split(v, " ")
+	words := strings.Split(v, space)
 	for _, word := range words {
 		if amountOfDigits(word) > 5 {
 			return true
@@ -345,7 +403,7 @@ func containsNumber(v string) bool {
 func isName(sentence string) bool {
 	nameAndFunction := splitNameAndFunction(sentence)
 
-	splitName := strings.Split(removeWhitespace(nameAndFunction[0]), " ")
+	splitName := strings.Split(removeWhitespace(nameAndFunction[0]), space)
 
 	// is a name e.g Kate Green, Richard Lindhout, Jan van der Doorn
 	if len(splitName) > 0 && len(splitName) <= 3 {
@@ -359,7 +417,7 @@ func isName(sentence string) bool {
 			// function name should not be more than 3 words
 			function := removeWhitespace(nameAndFunction[1])
 			isFunction := len(function) > 3
-			validFunction := strings.Count(function, " ") <= 3
+			validFunction := strings.Count(function, space) <= 3
 
 			if isFunction && !validFunction {
 				return false
@@ -499,7 +557,7 @@ func startWithOneOf(value string, a []string, addSpaceAfter bool) bool {
 	for _, prefix := range a {
 		finalPrefix := strings.ToLower(prefix)
 		if addSpaceAfter {
-			finalPrefix += " "
+			finalPrefix += space
 		}
 		if strings.HasPrefix(value, finalPrefix) {
 			return true
@@ -533,8 +591,6 @@ func isWhitespace(content string) bool {
 }
 
 // removeWhitespace removes all double spaces in text
-const space = ` `
-
 func removeWhitespace(v string) (r string) {
 	r = strings.ReplaceAll(v, "\t", space)
 	r = strings.ReplaceAll(r, `	`, space)
@@ -547,7 +603,7 @@ func removeWhitespace(v string) (r string) {
 }
 
 func removeEnters(v string) (r string) {
-	r = strings.ReplaceAll(v, "\n", "")
+	r = strings.ReplaceAll(v, enter, "")
 	if v != r {
 		r = removeEnters(r)
 	}
@@ -556,8 +612,8 @@ func removeEnters(v string) (r string) {
 
 func removeWhiteSpaceBeforeAndAfter(v string) (r string) {
 	r = strings.TrimSpace(v)
-	r = strings.TrimSuffix(r, "\n")
-	r = strings.TrimPrefix(r, "\n")
+	r = strings.TrimSuffix(r, enter)
+	r = strings.TrimPrefix(r, enter)
 	r = strings.TrimSpace(r)
 
 	if v != r {

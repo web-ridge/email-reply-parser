@@ -208,6 +208,46 @@ Beatrixlaan 2, 4694EG Scherpenisse
 *WEB     webRidge.nl <https://webridge.nl/>*
 `
 
+func TestRichardReverseSignature(t *testing.T) {
+	content := Parse(richardReverseMail)
+	expected := ":+1:"
+	if content != expected {
+		t.Errorf("expected: `%v` but is `%v`", expected, content)
+	}
+}
+
+const richardReverseMail = `
+
+On Mon, Aug 26, 2019 at 4:37 PM The Hiring Engine <
+a-really-long-automated-email+1234556@humanresources.com> wrote:
+> dd
+> sldfj
+> slfjlsdf
+> slkfjlksfj
+
+:+1:
+
+*Richard Lindhout* | *Eigenaar*
+*Bel mij +31 6 22 22 22 22* <+31622222222>
+
+[image: logo webridge]
+
+Beatrixlaan 2, 4694EG Scherpenisse
+
+*KVK      50000000*
+*BTW     NL0000000AA0*
+*IBAN    NL93 BUNQ 0000 1111 22*
+*WEB     webRidge.nl <https://webridge.nl/>*
+`
+
+func TestAbhishekSignature(t *testing.T) {
+	content := Parse(abishhekMail)
+	expected := "Hi"
+	if content != expected {
+		t.Errorf("expected: `%v` but is `%v`", expected, content)
+	}
+}
+
 const abishhekMail = `
 Hi
 
@@ -226,14 +266,6 @@ a-really-long-automated-email+1234556@humanresources.com> wrote:
 > slfjlsdf
 > slkfjlksfj
 `
-
-func TestAbhishekSignature(t *testing.T) {
-	content := Parse(abishhekMail)
-	expected := "Hi"
-	if content != expected {
-		t.Errorf("expected: `%v` but is `%v`", expected, content)
-	}
-}
 
 func TestAllKindOfCombinations(t *testing.T) {
 	var howManyCombinations int
