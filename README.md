@@ -55,4 +55,4 @@ We try to support the following languages
 - Forwarded emails
 
 
-Please add more tests for your language and use-cases 
+Please add more tests for your language and use-cases so we can make this library even better!
