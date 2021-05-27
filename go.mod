@@ -1,3 +1,3 @@
 module github.com/web-ridge/email-reply-parser
 
-go 1.14
+go 1.16
