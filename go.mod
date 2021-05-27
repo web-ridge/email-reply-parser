@@ -1,3 +1,3 @@
-module github.com/web-ridge/email-signature-parser
+module github.com/web-ridge/email-reply-parser
 
 go 1.14
