@@ -3,7 +3,17 @@ Email Reply Parser is a Golang library to parse plain-text email replies and ext
 
 This library supports most email replies, signatures and locales and quoted replies.
 
-This library is used at **small** scale within webRidge.
+## Example
+
+If you want to parse a RFC5322 mail to plain text use e.g. [DusanKasan/parsemail](https://github.com/DusanKasan/parsemail) and use the TextBody from that library in this library.
+```golang
+import (
+  erp "github.com/web-ridge/email-reply-parser"
+)
+content := erp.Parse(email.TextBody)
+```
+
+## Features
 
 - Supports stripping quoted replies in top/bottom
 - Strip email replies like On DATE, NAME <EMAIL> wrote:
