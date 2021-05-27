@@ -5,13 +5,15 @@ This library supports most email replies, signatures and locales and quoted repl
 
 ## Example
 
-If you want to parse a RFC5322 mail to plain text use e.g. [DusanKasan/parsemail](https://github.com/DusanKasan/parsemail) and use the TextBody from that library in this library.
+
 ```golang
 import (
   erp "github.com/web-ridge/email-reply-parser"
 )
 content := erp.Parse(email.TextBody)
 ```
+
+PS: If you want to parse a RFC5322 mail to plain text use e.g. [DusanKasan/parsemail](https://github.com/DusanKasan/parsemail) and use the TextBody from that library in this library.
 
 ## Features
 
