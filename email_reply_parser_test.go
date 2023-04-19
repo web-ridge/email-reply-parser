@@ -260,6 +260,19 @@ Beatrixlaan 2, 4694EG Scherpenisse
 *WEB     webRidge.nl <https://webridge.nl/>*
 `
 
+func TestMissingQuotedReply(t *testing.T) {
+	content := Parse(quotedReplyMissingContent)
+	expected := "Some content"
+	if content != expected {
+		t.Errorf("expected: `%v` but is `%v`", expected, content)
+	}
+}
+
+const quotedReplyMissingContent = `
+Some content
+
+On Monday, November 4, 2013 4:29 PM, John Smith <john.smith@example.org> wrote:`
+
 func TestAbhishekSignature(t *testing.T) {
 	content := Parse(abishhekMail)
 	expected := "Hi"

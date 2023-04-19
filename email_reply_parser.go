@@ -186,7 +186,7 @@ func detectQuotedEmailStart(lineIndex int, line *Line, lines []*Line) (bool, boo
 	lineWithBreaksInOneLine := strings.ToLower(removeEnters(joinLineContents("", line, after)))
 
 	multi := isQuotedEmailStart(lineWithBreaksInOneLine)
-	single := isQuotedEmailStart(strings.ToLower(line.ContentStripped)) && containsQuotedEmail(after.ContentStripped)
+	single := isQuotedEmailStart(strings.ToLower(line.ContentStripped)) && after != nil && containsQuotedEmail(after.ContentStripped)
 	if after != nil && containsQuotedEmail(after.ContentStripped) {
 		single = false
 	}
