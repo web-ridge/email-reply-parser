@@ -7,11 +7,12 @@ import (
 )
 
 type Line struct {
-	Index           int
-	Content         string
-	ContentStripped string
-	IsQuoted        bool
-	IsEmpty         bool
+	Index                 int
+	Content               string
+	ContentStripped       string
+	IsQuoted              bool
+	IsEmpty               bool
+	PossibleSignatureLine bool
 }
 
 const (
@@ -43,12 +44,14 @@ func plainMailToLines(plainMail string) []*Line {
 	lines := make([]*Line, len(baseLines))
 	for i, baseLine := range baseLines {
 		contentStripped := removeWhitespace(baseLine)
+		withoutMarkdown := removeMarkdown(contentStripped)
 		lines[i] = &Line{
-			Index:           i,
-			Content:         baseLine,
-			ContentStripped: removeMarkdown(contentStripped),
-			IsEmpty:         isWhitespace(contentStripped),
-			IsQuoted:        strings.HasPrefix(baseLine, ">"),
+			Index:                 i,
+			Content:               baseLine,
+			ContentStripped:       withoutMarkdown,
+			IsEmpty:               isWhitespace(contentStripped),
+			IsQuoted:              strings.HasPrefix(baseLine, ">"),
+			PossibleSignatureLine: isPossibleSignatureLine(withoutMarkdown),
 		}
 	}
 	return lines

@@ -1,3 +1,3 @@
-module github.com/web-ridge/email-reply-parser
+module github.com/barshow/email-reply-parser
 
-go 1.16
+go 1.18
