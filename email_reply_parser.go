@@ -198,7 +198,7 @@ func detectQuotedEmailStart(lineIndex int, line *Line, lines []*Line) (bool, boo
 }
 
 func isValidSignatureFormat(fullLine string) bool {
-	return strings.TrimSpace(fullLine) == "--"
+	return signatureRegex.MatchString(strings.TrimSpace(fullLine))
 }
 
 func detectSignature(lineIndex int, line *Line, lines []*Line) bool {
@@ -554,6 +554,7 @@ func joinLineContents(sep string, lines ...*Line) string {
 
 //nolint:gochecknoglobals
 var numberRegex = regexp.MustCompile("[0-9]+")
+var signatureRegex = regexp.MustCompile(`(^--|^__)|(^Sent from my (\w+\s*){1,3})`)
 
 func findNumbers(v string) []string {
 	return numberRegex.FindAllString(v, -1)
